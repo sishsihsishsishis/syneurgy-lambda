@@ -1,0 +1,20 @@
+{
+  "session": {
+    "id": "cs_test_a1f1T9irKg3RsKmfIxFtSzPhkStEBfM7NBBAqHgzqjMFv4ngqmJpHweO0g",
+    "currency": "usd",
+    "payment_status": "paid",
+    "mode": "subscription",
+    "status": "complete"
+  },
+  "invoice": { "id": "in_1Of2ASAfx0x5xw4lPPJPT5vb" },
+  "customer": {
+    "id": "cus_PU0AI2bg28OmC7",
+    "name": "Can",
+    "email": "myemail1@myemail.com"
+  },
+  "subscription": {
+    "id": "sub_1Of2ASAfx0x5xw4lYAXG5gPM",
+    "quantity": 1,
+    "status": "active"
+  }
+}

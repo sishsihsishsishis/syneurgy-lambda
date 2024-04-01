@@ -64,7 +64,6 @@ export const handler = async (event) => {
       };
     }
     
-    // Check license
     result = await queryFunction.licenses(
       client, 
       { command: 'get-license-by-id-and-is_admin-and-subscription_id',
@@ -81,7 +80,6 @@ export const handler = async (event) => {
       };
     }
 
-    // Delete license
     result = await queryFunction.licenses(
       client, 
       { command: 'delete-license-by-id',

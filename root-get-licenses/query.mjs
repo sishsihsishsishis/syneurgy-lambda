@@ -118,17 +118,3 @@ export async function deleteLicense(db, options = {}) {
 export async function activateOrAddFreeLicense(db, id, status, free_account) {
   return db.query("UPDATE licenses SET status = $2, free_account = $3 WHERE id = $1 RETURNING *", [id, status, free_account]);
 }
-
-export async function paymentSettings(db, options = {}) {
-  const { command, data, filters } = options;
-
-  switch (command) {
-    case 'get-by-id':
-      return db.query("SELECT * FROM payment_settings WHERE id = $1", [filters.id]);
-    case 'get-by-key':
-      return db.query("SELECT * FROM payment_settings WHERE arg_name = $1", [filters.key]);
-    case 'update-value-by-key':
-      return db.query("UPDATE payment_settings SET arg_value = $2 WHERE arg_name = $1 RETURNING *", [filters.key, data.value]);
-  }
-  return undefined;
-}

@@ -19,7 +19,7 @@ export const handler = async (event) => {
 
     // Get token email (current user)
     const email = utils.parseAndCheckHttpError(await utils.getTokenEmail(event));
-
+    
     // Check payment status
     await utils.parseAndCheckHttpError(await utils.checkPaymentStatus(client, email));
 

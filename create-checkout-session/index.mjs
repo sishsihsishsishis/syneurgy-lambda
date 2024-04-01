@@ -27,7 +27,8 @@ export const handler = async (event) => {
     const email = event.queryStringParameters && event.queryStringParameters.email;
     const callbackSuccess = event.queryStringParameters && event.queryStringParameters.callback_success;
     const callbackFailure = event.queryStringParameters && event.queryStringParameters.callback_failure;
-
+    const price = event.queryStringParameters && event.queryStringParameters.price;
+    
     if (!callbackSuccess) {
       return {
         statusCode: 400,
@@ -41,6 +42,14 @@ export const handler = async (event) => {
         statusCode: 400,
         headers: configEnv.headers,
         body: JSON.stringify({ error: 'Missing callback_failure parameter.' }),
+      };
+    }
+    
+    if (!price) {
+      return {
+        statusCode: 400,
+        headers: configEnv.headers,
+        body: JSON.stringify({ error: 'Missing price parameter.' }),
       };
     }
 
@@ -78,7 +87,7 @@ export const handler = async (event) => {
     const session = await stripeInstance.checkout.sessions.create({
       line_items: [
         {
-          price: configEnv.stripeSubscriptionPrice,
+          price: price,
           adjustable_quantity: {
             enabled: true,
             minimum: 1,
@@ -98,6 +107,7 @@ export const handler = async (event) => {
         },
         trial_period_days: freeTrial,
       },
+      customer_email: email,
       metadata: {
         email
       },
@@ -117,7 +127,7 @@ export const handler = async (event) => {
     return {
       statusCode: error?.details?.statusCode || 500,
       headers: configEnv.headers,
-      body: JSON.stringify(error?.details?.body || { error: 'Internal Server Error.' }),
+      body: JSON.stringify(error || { error: 'Internal Server Error.' }),
     };
   } finally {
     await client.end();

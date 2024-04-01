@@ -30,7 +30,6 @@ export function parseAndCheckHttpError(data) {
 }
 
 async function validateTokenExternal(authorizationToken) {
-  let response;
   try {
     if (!authorizationToken) {
       return {
@@ -49,7 +48,7 @@ async function validateTokenExternal(authorizationToken) {
     }
 
     let messageError = '';
-    response = await axios.post(configEnv.validateTokenExternalUrl, { jwtToken: authorizationToken });
+    const response = await axios.post(configEnv.validateTokenExternalUrl, { jwtToken: authorizationToken });
 
     switch (response?.data?.status) {
       case 'expired':
@@ -264,25 +263,4 @@ export async function checkPaymentStatus(client, email, callback = undefined) {
 
     return response;
   }
-}
-
-export function isTrialPeriodValid(trialStartTimestamp, trialEndTimestamp) {
-  const now = Date.now();
-  return now >= trialStartTimestamp * 1000 && now <= trialEndTimestamp * 1000;
-};
-
-export function calculateRemainingTime(trialEndTimestamp) {
-  const now = Date.now();
-  const timeRemaining = trialEndTimestamp * 1000 - now;
-  return timeRemaining > 0 ? timeRemaining : 0;
-};
-
-export function formatTimeRemaining(milliseconds) {
-  const seconds = Math.abs(milliseconds) / 1000;
-  const days = Math.floor(seconds / (3600 * 24));
-  const hours = Math.floor((seconds % (3600 * 24)) / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const remainingSeconds = Math.floor(seconds % 60);
-
-  return `${days} days, ${hours} hours, ${minutes} minutes, ${remainingSeconds} seconds`;
 }

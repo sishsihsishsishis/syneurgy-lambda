@@ -71,6 +71,9 @@ export const handler = async (event) => {
         };
       }
 
+      console.log('subscriptionData.stripe_data:', subscriptionData.stripe_data);
+      console.log('subscriptionData.stripe_data.subscription.id:', subscriptionData.stripe_data.subscription.id);
+
       await stripeInstance.subscriptions.cancel(subscriptionData.stripe_data.subscription.id);
       
       return {

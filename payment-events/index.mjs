@@ -3,9 +3,10 @@
 import pg from 'pg';
 import stripe from "stripe";
 import * as webhook from './events.mjs';
+import * as configEnv from './config.mjs';
 
-const stripeInstance = stripe("sk_test_51OWQU7Afx0x5xw4lYb2MXfpwPq1CnAu7K63gsMiEfkCHcfYSXeijBj92v83zuFbKlMuJ55VHyJd62M8VgeShDFqg00pRDjfSMg");
-const endpointSecret = "whsec_qrl0RTxLsrXMYSdr2Cf00lyeS7VkEwol";
+const stripeInstance = stripe(configEnv.stripeSecretKey);
+const endpointSecret = configEnv.stripeWebhookEndpointSecret;
 
 export const handler = async (event) => {
   if (!event.body) {
@@ -23,11 +24,11 @@ export const handler = async (event) => {
   const requestBody = event.body;
 
   const dbConfig = {
-    user: 'postgres',
-    host: 'database-1.cf98jxsxxyfj.us-east-2.rds.amazonaws.com',
-    database: 'testdb',
-    password: 'CliFForD02116ClaVin(!)(#)',
-    port: 5432,
+    user: configEnv.dbUser,
+    host: configEnv.dbHost,
+    database: configEnv.dbName,
+    password: configEnv.dbPwd,
+    port: configEnv.dbPort,
   };
   
   const client = new pg.Client(dbConfig);
@@ -35,11 +36,14 @@ export const handler = async (event) => {
   
   try {
     await client.connect();
-
+    
     try {
       const event = stripeInstance.webhooks.constructEvent(requestBody, sig, endpointSecret);
+      
       await webhook.handleStripeWebhook(client, stripeInstance, event);
+      console.log('here3~~~', event);
     } catch (err) {
+      
       return {
         statusCode: 400,
         headers: {

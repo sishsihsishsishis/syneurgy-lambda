@@ -60,8 +60,6 @@ export async function subscriptions(db, options = {}) {
   const { command, data, filters } = options;
 
   switch (command) {
-    case 'get-subscription':
-      return db.query("SELECT * FROM subscriptions");
     case 'get-subscription-by-id':
       return db.query("SELECT * FROM subscriptions WHERE id = $1", [filters.id]);
     case 'get-subscription-by-user_email':
@@ -78,12 +76,8 @@ export async function licenses(db, options = {}) {
       return db.query("INSERT INTO licenses (id, user_email, subscription_id, status, account_created, free_account, created_date) VALUES (nextval('licenses_id_seq'::regclass), $1, $2, $3, $4, $5, NOW()) RETURNING *", [data.user_email, data.subscription_id, data.status, data.account_created, data.free_account]);
     case 'update-license':
       return db.query("UPDATE licenses SET subscription_id = $2, status = $3, free_account = $4 WHERE id = $1 RETURNING *", [data.id, data.subscription_id, data.status, data.free_account]);
-    case 'get-licenses':
-      return db.query("SELECT * FROM licenses");
     case 'get-license-by-user_email':
       return db.query("SELECT * FROM licenses WHERE user_email = $1", [filters.user_email]);
-    case 'get-license-by-id':
-      return db.query("SELECT * FROM licenses WHERE id = $1", [filters.id]);
     case 'get-license-by-user_email-and-is_admin':
       return db.query("SELECT * FROM licenses WHERE user_email = $1 AND is_admin = $2", [filters.user_email, filters.is_admin]);
     case 'get-license-by-subscription_id':
@@ -117,18 +111,4 @@ export async function deleteLicense(db, options = {}) {
 
 export async function activateOrAddFreeLicense(db, id, status, free_account) {
   return db.query("UPDATE licenses SET status = $2, free_account = $3 WHERE id = $1 RETURNING *", [id, status, free_account]);
-}
-
-export async function paymentSettings(db, options = {}) {
-  const { command, data, filters } = options;
-
-  switch (command) {
-    case 'get-by-id':
-      return db.query("SELECT * FROM payment_settings WHERE id = $1", [filters.id]);
-    case 'get-by-key':
-      return db.query("SELECT * FROM payment_settings WHERE arg_name = $1", [filters.key]);
-    case 'update-value-by-key':
-      return db.query("UPDATE payment_settings SET arg_value = $2 WHERE arg_name = $1 RETURNING *", [filters.key, data.value]);
-  }
-  return undefined;
 }

@@ -21,9 +21,10 @@ export const handler = async (event) => {
       };
     }
 
+    // client = utils.parseAndCheckHttpError(await utils.getDBInstance());
+
     // Get token email (current user)
-    // const email = utils.parseAndCheckHttpError(await utils.getTokenEmail(event));
-    const email = event.queryStringParameters && event.queryStringParameters.email;
+    const email = utils.parseAndCheckHttpError(await utils.getTokenEmail(event));
 
     let result = await queryFunction.licenses(
       client, 

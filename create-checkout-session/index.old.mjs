@@ -3,14 +3,14 @@
 import pg from 'pg';
 import stripe from "stripe";
 
-const stripeInstance = stripe("sk_test_51OWQU7Afx0x5xw4lYb2MXfpwPq1CnAu7K63gsMiEfkCHcfYSXeijBj92v83zuFbKlMuJ55VHyJd62M8VgeShDFqg00pRDjfSMg");
+const stripeInstance = stripe("sk_test_51OUhzLIWaeZ8PDgTT3vm7uTwCDTOiCSmeXcRArgNLva48lnXGUBiuvFQ9yMEL81ri4ckm9ul6RuIbiNzMpXhxIFr003xqGjRAS");
 
 export const handler = async (event) => {
   let session
   const email = event.queryStringParameters && event.queryStringParameters.email;
   const callbackSuccess = event.queryStringParameters && event.queryStringParameters.callback_success;
   const callbackFailure = event.queryStringParameters && event.queryStringParameters.callback_failure;
-
+  console.log('')
   if (!email) {
     return {
       statusCode: 400,

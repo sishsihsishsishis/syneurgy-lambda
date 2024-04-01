@@ -18,8 +18,8 @@ export const handler = async (event) => {
     // utils.parseAndCheckHttpError(await utils.getTokenEmail(event));
     
     const emails = [
-      'Erwin@syneurgy.com',
-      'Michael@syneurgy.com',
+      'erwin@syneurgy.com',
+      'michael@syneurgy.com',
       'shijia@syneurgy.com',
       'david@syneurgy.com',
       'pcastanog@unal.edu.co'
