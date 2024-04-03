@@ -28,6 +28,7 @@ export const handler = async (event) => {
     const callbackSuccess = event.queryStringParameters && event.queryStringParameters.callback_success;
     const callbackFailure = event.queryStringParameters && event.queryStringParameters.callback_failure;
     const price = event.queryStringParameters && event.queryStringParameters.price;
+    let quantity = event.queryStringParameters && event.queryStringParameters.quantity;
     
     if (!callbackSuccess) {
       return {
@@ -51,6 +52,10 @@ export const handler = async (event) => {
         headers: configEnv.headers,
         body: JSON.stringify({ error: 'Missing price parameter.' }),
       };
+    }
+
+    if (!quantity) {
+      quantity = 1;
     }
 
     let result = await queryFunction.licenses(
@@ -93,7 +98,7 @@ export const handler = async (event) => {
             minimum: 1,
             maximum: 99,
           },
-          quantity: 1,
+          quantity: quantity,
         },
       ],
       mode: "subscription",
