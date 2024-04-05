@@ -96,8 +96,9 @@ export const handler = async (event) => {
       subscriptionData.stripe_data.customer = subscriptionData?.stripe_data?.customer?.id !== undefined && subscriptionData?.stripe_data?.customer?.id !== null ?
       { ...await stripeInstance.customers.retrieve(subscriptionData?.stripe_data?.customer?.id) } : subscriptionData.stripe_data.customer;
     }
-
+    
     let pending_plan_change = false;
+    let pending_plan_change_date = null;
     if (subscriptionData?.stripe_data?.subscription?.id !== undefined && subscriptionData?.stripe_data?.subscription?.id !== null )
     {
       const stripeSubscriptionData = await stripeInstance.subscriptions.retrieve(subscriptionData?.stripe_data?.subscription?.id);
@@ -109,14 +110,21 @@ export const handler = async (event) => {
         if (subscriptionSchedule !== undefined && subscriptionSchedule != null) {
           
           const currPhase = subscriptionSchedule.current_phase;
-          const phase1 = subscriptionSchedule.phases[1];
+          const phase1 = subscriptionSchedule.phases[(subscriptionSchedule.phases.length - 1)];
           
           // If currPhase.end_date = phase1.end_date, the product update has happened and we can schedule a new change
           pending_plan_change = currPhase.end_date != phase1.end_date;
+          
+          if (pending_plan_change)
+          {
+            const date = new Date(phase1.start_date * 1000);
+            pending_plan_change_date = date.toISOString();
+          }
         }
       }
     }
     
+
     const response = {
       statusCode: 200,
       headers: configEnv.headers,
@@ -124,6 +132,7 @@ export const handler = async (event) => {
         subscription: subscriptionData,
         licenses: licensesData,
         pending_plan_change: pending_plan_change,
+        pending_plan_change_date: pending_plan_change_date,
         user_email_admin: userEmailAdmin,
       }),
     };
