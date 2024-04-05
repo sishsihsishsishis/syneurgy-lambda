@@ -97,12 +97,33 @@ export const handler = async (event) => {
       { ...await stripeInstance.customers.retrieve(subscriptionData?.stripe_data?.customer?.id) } : subscriptionData.stripe_data.customer;
     }
 
+    let pending_plan_change = false;
+    if (subscriptionData?.stripe_data?.subscription?.id !== undefined && subscriptionData?.stripe_data?.subscription?.id !== null )
+    {
+      const stripeSubscriptionData = await stripeInstance.subscriptions.retrieve(subscriptionData?.stripe_data?.subscription?.id);
+      
+      if ( stripeSubscriptionData.schedule != null )
+      {
+        const subscriptionSchedule = await stripeInstance.subscriptionSchedules.retrieve(stripeSubscriptionData.schedule);
+        
+        if (subscriptionSchedule !== undefined && subscriptionSchedule != null) {
+          
+          const currPhase = subscriptionSchedule.current_phase;
+          const phase1 = subscriptionSchedule.phases[1];
+          
+          // If currPhase.end_date = phase1.end_date, the product update has happened and we can schedule a new change
+          pending_plan_change = currPhase.end_date != phase1.end_date;
+        }
+      }
+    }
+    
     const response = {
       statusCode: 200,
       headers: configEnv.headers,
       body: JSON.stringify({
         subscription: subscriptionData,
         licenses: licensesData,
+        pending_plan_change: pending_plan_change,
         user_email_admin: userEmailAdmin,
       }),
     };
