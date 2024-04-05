@@ -1,0 +1,212 @@
+// index.mjs
+
+import stripe from "stripe";
+
+import * as configEnv from './config.mjs';
+import * as queryFunction from './query.mjs';
+import * as utils from './utils.mjs';
+
+const stripeInstance = stripe(configEnv.stripeSecretKey);
+
+async function compareProductPrices(current_price_id, price_id) {
+    try {
+        // Get the current and new prices
+        const currentPrice = await stripeInstance.prices.retrieve(current_price_id);
+        const newPrice = await stripeInstance.prices.retrieve(price_id);
+
+        // Compare the prices
+        if (currentPrice.unit_amount < newPrice.unit_amount) {
+            return 'more_expensive';
+        } else if (currentPrice.unit_amount > newPrice.unit_amount) {
+            return 'less_expensive';
+        } else {
+            return 'same_price';
+        }
+    } catch (error) {
+        console.error('Error comparing prices', error);
+    }
+}
+
+async function getSubscriptionScheduleId(currentSubscription, customerId) {
+
+    const schedules = await stripeInstance.subscriptionSchedules.list({
+        customer: customerId
+    });
+
+    if (schedules.data.length > 0) {
+        // We need to check if there is an active or not_started schedule
+
+        for (let i = 0; i < schedules.data.length; i++) {
+            const schedule = schedules.data[i];
+            if (schedule.status === 'not_started' || schedule.status === 'active') {
+                return schedule;
+            }
+        }
+        const schedule = await stripeInstance.subscriptionSchedules.create({
+            from_subscription: currentSubscription.id
+        });
+        return schedule;
+    } else {
+        const schedule = await stripeInstance.subscriptionSchedules.create({
+            from_subscription: currentSubscription.id
+        });
+        return schedule;
+    }
+
+}
+
+export const handler = async (event) => {
+    const client = utils.parseAndCheckHttpError(await utils.getDBInstance());
+
+    try {
+
+        // CORS Preflight
+        if (event?.requestContext?.http?.method === 'OPTIONS') {
+            return {
+                statusCode: 200,
+                headers: configEnv.headers,
+                body: '',
+            };
+        }
+
+        // Get token email (current user)
+        const email = utils.parseAndCheckHttpError(await utils.getTokenEmail(event));
+
+        // Check if you are the administrator or provider of this license
+        const subscription = await queryFunction.subscriptions(
+            client,
+            {
+                command: 'get-subscription-by-user_email',
+                filters: { user_email: email }
+            }
+        );
+        const subscriptionData = subscription?.rows[0];
+
+        if (!subscriptionData) {
+            return {
+                statusCode: 400,
+                headers: configEnv.headers,
+                body: JSON.stringify({ email, error: 'You do not have permission for this resource.' }),
+            };
+        }
+
+        if (!event.body) {
+            return {
+                statusCode: 400,
+                headers: configEnv.headers,
+                body: JSON.stringify({ error: 'Missing request body.' }),
+            };
+        }
+
+        const requestBody = JSON.parse(event.body);
+        const { price_id, new_quantity } = requestBody;
+
+        if (!price_id) {
+            return {
+                statusCode: 400,
+                headers: configEnv.headers,
+                body: JSON.stringify({ error: 'Missing price_id parameter.' }),
+            };
+        }
+
+        if (!new_quantity) {
+            return {
+                statusCode: 400,
+                headers: configEnv.headers,
+                body: JSON.stringify({ error: 'Missing new_quantity parameter.' }),
+            };
+        }
+
+        const subscriptionId = subscriptionData?.stripe_data?.subscription?.id;
+
+        //const price_id = 'price_1OymdZIWaeZ8PDgTVburlec3'; // PRO
+        //const price_id = 'price_1OymeHIWaeZ8PDgTdg8a0irz'; // Enterprise
+        //const new_quantity = 20;
+
+        // Get the current subscription to find the subscription item ID
+        const currentSubscription = await stripeInstance.subscriptions.retrieve(subscriptionId);
+
+        // Get the subscription item (we suppose that the subscription has only one line item (product))
+        const subscriptionItem = currentSubscription.items.data[0];
+        const subscriptionItemId = currentSubscription.items.data[0].id;
+        const currentProductQuantity = currentSubscription.items.data[0].quantity;
+
+        // Get the customer ID
+        const customerId = currentSubscription.customer;
+
+        // Get the current price ID
+        const current_price_id = subscriptionItem.price.id;
+
+        let upgradeOrSame = true;
+
+        switch (await compareProductPrices(current_price_id, price_id)) {
+            case 'less_expensive':
+                upgradeOrSame = false;
+                break;
+            default:
+                break;
+        }
+
+        console.log('upgradeOrSame', upgradeOrSame)
+        let updatedSubscription = null;
+
+        if (upgradeOrSame) {
+            // Update the subscription item with the new price and quantity (UPGRADE or SAME PRICE)
+            updatedSubscription = await stripeInstance.subscriptions.update(subscriptionId, {
+                items: [{
+                    id: subscriptionItemId,
+                    price: price_id, // New price ID
+                    quantity: new_quantity, // New quantity
+                }],
+            });
+            console.log('Subscription updated:', updatedSubscription);
+        }
+        else {
+
+            // Update the subscription item with the new price and quantity (DOWNGRADE)
+            const schedule = await getSubscriptionScheduleId(currentSubscription, customerId);
+
+            const scheduleId = schedule.id;
+            console.log('Subscription Schedule ID:', scheduleId);
+
+            const currPhase = schedule.phases[0];
+
+            const updatedSchedule = await stripeInstance.subscriptionSchedules.update(scheduleId, {
+                phases: [
+                    {
+                        items: [{ price: currPhase.items[0].price, quantity: currentProductQuantity }],
+                        start_date: currPhase.start_date,
+                        end_date: currPhase.end_date,
+                        proration_behavior: 'none'
+                    },
+                    {
+                        items: [{ price: price_id, quantity: new_quantity }]
+                    }
+                ]
+            });
+            console.log('Subscription Schedule updated:', updatedSchedule);
+        }
+
+        const response = {
+            statusCode: 200,
+            headers: configEnv.headers,
+            body: JSON.stringify({
+                subscription: currentSubscription,
+                updatedSubscription: updatedSubscription
+            }),
+        };
+
+        return response;
+    }
+    catch (error) {
+        console.log(error);
+        return {
+            statusCode: error?.details?.statusCode || 500,
+            headers: configEnv.headers,
+            body: JSON.stringify(error?.details?.body || { error: 'Internal Server Error.' }),
+        };
+    }
+    finally {
+        await client.end();
+    }
+};
