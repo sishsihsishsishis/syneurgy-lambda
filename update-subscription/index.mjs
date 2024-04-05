@@ -127,6 +127,16 @@ export const handler = async (event) => {
         const subscriptionItemId = currentSubscription.items.data[0].id;
         const currentProductQuantity = currentSubscription.items.data[0].quantity;
 
+
+        if (new_quantity < currentProductQuantity) {
+            return {
+                statusCode: 400,
+                headers: configEnv.headers,
+                body: JSON.stringify({ error: 'New quantity must be greater or equal than the current one' }),
+            };
+        }
+
+
         // Get the customer ID
         const customerId = currentSubscription.customer;
 
