@@ -119,10 +119,6 @@ export const handler = async (event) => {
 
         const subscriptionId = subscriptionData?.stripe_data?.subscription?.id;
 
-        //const price_id = 'price_1OymdZIWaeZ8PDgTVburlec3'; // PRO
-        //const price_id = 'price_1OymeHIWaeZ8PDgTdg8a0irz'; // Enterprise
-        //const new_quantity = 20;
-
         // Get the current subscription to find the subscription item ID
         const currentSubscription = await stripeInstance.subscriptions.retrieve(subscriptionId);
 
@@ -144,6 +140,9 @@ export const handler = async (event) => {
                 upgradeOrSame = false;
                 break;
             default:
+                if (new_quantity < currentProductQuantity) {
+                    upgradeOrSame = false;
+                }
                 break;
         }
 
@@ -169,12 +168,12 @@ export const handler = async (event) => {
             const scheduleId = schedule.id;
             console.log('Subscription Schedule ID:', scheduleId);
 
-            const currPhase = schedule.phases[0];
+            const currPhase = schedule.phases[schedule.phases.length - 1];
 
             const updatedSchedule = await stripeInstance.subscriptionSchedules.update(scheduleId, {
                 phases: [
                     {
-                        items: [{ price: currPhase.items[0].price, quantity: currentProductQuantity }],
+                        items: [{ price: currPhase.items[0].price, quantity: currPhase.items[0].quantity }],
                         start_date: currPhase.start_date,
                         end_date: currPhase.end_date,
                         proration_behavior: 'none'
