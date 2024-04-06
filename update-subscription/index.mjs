@@ -178,20 +178,49 @@ export const handler = async (event) => {
             const scheduleId = schedule.id;
             console.log('Subscription Schedule ID:', scheduleId);
 
+            let now = Math.floor(Date.now() / 1000); 
+            
+            // only for test mode
+            const testClockId = currentSubscription.test_clock;
+            if (testClockId != null) {
+                const testClock = await stripeInstance.testHelpers.testClocks.retrieve(testClockId);
+                now = testClock.frozen_time;
+            }
+            
+            const inTrial = currentSubscription.trial_end && currentSubscription.trial_end > now;
             const currPhase = schedule.phases[schedule.phases.length - 1];
 
+
+            const phasesToUpdate = [];
+            if (!inTrial) {
+                phasesToUpdate.push({
+                    items: [{ price: currPhase.items[0].price, quantity: currPhase.items[0].quantity }],
+                    start_date: currPhase.start_date,
+                    end_date: currPhase.end_date,
+                    proration_behavior: 'none'
+                });
+                phasesToUpdate.push({
+                    items: [{ price: price_id, quantity: new_quantity }]
+                });
+            }
+            else{
+                const currPhase = schedule.phases[0];
+                phasesToUpdate.push({
+                    items: [{ price: currPhase.items[0].price, quantity: currPhase.items[0].quantity }],
+                    start_date: currPhase.start_date,
+                    end_date: currPhase.end_date,
+                    trial: true,
+                    proration_behavior: 'none'
+                });
+                phasesToUpdate.push({
+                    items: [{ price: price_id, quantity: new_quantity }],
+                    start_date: currentSubscription.trial_end
+                });
+            }
+            
+
             const updatedSchedule = await stripeInstance.subscriptionSchedules.update(scheduleId, {
-                phases: [
-                    {
-                        items: [{ price: currPhase.items[0].price, quantity: currPhase.items[0].quantity }],
-                        start_date: currPhase.start_date,
-                        end_date: currPhase.end_date,
-                        proration_behavior: 'none'
-                    },
-                    {
-                        items: [{ price: price_id, quantity: new_quantity }]
-                    }
-                ]
+                phases: phasesToUpdate
             });
             console.log('Subscription Schedule updated:', updatedSchedule);
         }
