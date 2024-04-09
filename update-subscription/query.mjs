@@ -132,3 +132,7 @@ export async function paymentSettings(db, options = {}) {
   }
   return undefined;
 }
+
+export async function createLicenseSchedule(db, subscription_id, license_id, scheduled_date) {
+  return db.query("INSERT INTO scheduled_downgrades (id, subscription_id, license_id, created_date, completed, scheduled_date) VALUES (nextval('scheduled_downgrades_seq'::regclass), $1, $2, NOW(), false, to_timestamp($3)) RETURNING *", [subscription_id, license_id, scheduled_date]);
+}

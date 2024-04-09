@@ -99,7 +99,7 @@ export const handler = async (event) => {
         }
 
         const requestBody = JSON.parse(event.body);
-        const { price_id, new_quantity } = requestBody;
+        const { price_id, new_quantity, license_ids } = requestBody;
 
         if (!price_id) {
             return {
@@ -128,13 +128,13 @@ export const handler = async (event) => {
         const currentProductQuantity = currentSubscription.items.data[0].quantity;
 
 
-        if (new_quantity < currentProductQuantity) {
+        /*if (new_quantity < currentProductQuantity) {
             return {
                 statusCode: 400,
                 headers: configEnv.headers,
                 body: JSON.stringify({ error: 'New quantity must be greater or equal than the current one' }),
             };
-        }
+        }*/
 
 
         // Get the customer ID
@@ -155,6 +155,27 @@ export const handler = async (event) => {
                 }
                 break;
         }
+
+        if (new_quantity < currentProductQuantity) {
+            
+            // If the new quantity is less than the current one, we need to check if the user has licenses to remove
+            if (!license_ids) {
+                return {
+                    statusCode: 400,
+                    headers: configEnv.headers,
+                    body: JSON.stringify({ error: 'Missing license_ids parameter.' }),
+                };
+            }
+
+            if (license_ids !== null && license_ids.length > 0 && license_ids.length > (new_quantity)) {
+                return {
+                    statusCode: 400,
+                    headers: configEnv.headers,
+                    body: JSON.stringify({ error: 'The amount of scheduled licenses needs to be less or equal to the new plan quantity' }),
+                };
+            }
+        }
+        
 
         console.log('upgradeOrSame', upgradeOrSame)
         let updatedSubscription = null;
@@ -223,6 +244,41 @@ export const handler = async (event) => {
                 phases: phasesToUpdate
             });
             console.log('Subscription Schedule updated:', updatedSchedule);
+
+            const scheduled_date = updatedSchedule.phases[updatedSchedule.phases.length - 1].start_date;
+            console.log('Next change on:', scheduled_date);
+
+
+            // Check if you are the administrator or provider of this license
+            const subscription = await queryFunction.subscriptions(
+            client, 
+            { command: 'get-subscription-by-user_email',
+                filters: { user_email: email }
+            }
+            );
+            const subscriptionData = subscription?.rows[0];
+
+            if (!subscriptionData) {
+            return {
+                statusCode: 400,
+                headers: configEnv.headers,
+                body: JSON.stringify({ email, error: 'You do not have permission for this resource.' }),
+            };
+            }
+
+            if (!subscriptionData) {
+            return {
+                statusCode: 400,
+                headers: configEnv.headers,
+                body: JSON.stringify({ error: 'Subscription not found.' }),
+            };
+            }
+
+            // We need to store the licenses to be preserved
+            for (let i = 0; i < license_ids.length; i++) {
+                const license_schedule = await queryFunction.createLicenseSchedule(client, subscriptionData.id, license_ids[i], scheduled_date);
+            }
+
         }
 
         const response = {

@@ -41,17 +41,42 @@ async function activateDeactivateLicenses(db, subscriptionId, numLicenses, deact
   let affectedLicenses = 0;
   const licenses = await getLicensesBySubscriptionId(db, subscriptionId, numLicenses);
 
-  await db.query('UPDATE licenses SET status = $1 WHERE subscription_id = $2', [!deactivateAllLicenses, subscriptionId]);
+  const pendingScheduledDowngrades = await getPendingScheduledDowngrades(db, subscriptionId);
 
-  if (!deactivateAllLicenses && licenses.rows.length > 0 && numLicenses <= licenses.rows.length) {
-    affectedLicenses = licenses.rows.slice(0, numLicenses);
+  console.log('pendingScheduledDowngrades', pendingScheduledDowngrades.rows);
 
-    for (const license of affectedLicenses) {
-      await db.query('UPDATE licenses SET status = $1 WHERE id = $2', [false, license.id]);
+  if (pendingScheduledDowngrades.rows.length > 0) {
+    // If there are pending scheduled downgrades, we need to deactivate all licenses
+    // and activate only the ones that are in the pending scheduled downgrades
+
+    await db.query('UPDATE licenses SET status = $1 WHERE subscription_id = $2 and is_admin = $3', [false, subscriptionId, false]);
+
+    for (const scheduledDowngrade of pendingScheduledDowngrades.rows) {
+      await db.query('UPDATE licenses SET status = $1 WHERE id = $2', [true, scheduledDowngrade.license_id]);
+      await db.query('UPDATE scheduled_downgrades SET completed = $1 WHERE id = $2', [true, scheduledDowngrade.id]);
     }
   }
+
+  else {
+
+    await db.query('UPDATE licenses SET status = $1 WHERE subscription_id = $2', [!deactivateAllLicenses, subscriptionId]);
+
+    if (!deactivateAllLicenses && licenses.rows.length > 0 && numLicenses <= licenses.rows.length) {
+      affectedLicenses = licenses.rows.slice(0, numLicenses);
   
+      for (const license of affectedLicenses) {
+        await db.query('UPDATE licenses SET status = $1 WHERE id = $2', [false, license.id]);
+      }
+    }
+
+  }
+
   return affectedLicenses;
+}
+
+async function getPendingScheduledDowngrades(db, subscriptionId) {
+  let stringQuery = "SELECT * FROM scheduled_downgrades WHERE subscription_id = $1 AND completed = false AND scheduled_date <= NOW() ORDER BY created_date DESC";
+  return db.query(stringQuery, [subscriptionId]);
 }
 
 async function customerSubscriptionDeleted(db, subscriptionId) {
