@@ -93,7 +93,7 @@ export const handler = async (event) => {
             }
           }
         }
-
+      }
       if (responseBody) {
         responseBody.push({
           subscription: subscriptionData,
@@ -115,6 +115,7 @@ export const handler = async (event) => {
 
     return response;
   } catch (error) {
+    console.log(error);
     return {
       statusCode: error?.details?.statusCode || 500,
       headers: configEnv.headers,

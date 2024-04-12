@@ -61,7 +61,7 @@ export async function subscriptions(db, options = {}) {
 
   switch (command) {
     case 'get-subscription':
-      return db.query("SELECT * FROM subscriptions");
+      return db.query("SELECT subscriptions.* FROM subscriptions INNER JOIN users ON users.email = subscriptions.user_email WHERE is_active = true");
     case 'get-subscription-by-id':
       return db.query("SELECT * FROM subscriptions WHERE id = $1", [filters.id]);
     case 'get-subscription-by-user_email':
