@@ -13,5 +13,6 @@ export const dbName = process.env.DB_NAME;
 export const dbPwd = process.env.DB_PWD;
 export const dbPort = parseInt(process.env.DB_PORT, 10) || 5432;
 export const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-export const stripeSubscriptionPrice = process.env.STRIPE_SUBSCRIPTION_PRICE;
+export const stripeProductPrices = process.env.STRIPE_PRODUCT_PRICES;
 export const stripeWebhookEndpointSecret = process.env.STRIPE_WEBHOOK_ENDPOINT_SECRET;
+

@@ -1,3 +1,6 @@
+import * as configEnv from './config.mjs';
+const stripeProductPrices = configEnv.stripeProductPrices;
+
 // Private methods
 async function createPaymentEvent(db, event_type, event_data, user_email = null, subscription_id = null) {
   return db.query("INSERT INTO payment_events (id, user_email, subscription_id, event_type, event_data, created_date) VALUES (nextval('payment_events_id_seq'::regclass), $1, $2, $3, $4, NOW()) RETURNING *", [user_email, subscription_id, event_type, event_data]);
@@ -83,6 +86,20 @@ async function customerSubscriptionDeleted(db, subscriptionId) {
   return await deleteSubscription(db, subscriptionId);
 }
 
+
+async function updateUserPaidStatus(db, user_email, price_id) {
+  const products = JSON.parse(stripeProductPrices);  
+  let id = 0;
+  for(let i=0; i<products.length; i++) {
+    if ( price_id === products[i].price ){
+      id = products[i].id;
+      break;
+    }
+  }
+  return db.query("UPDATE users SET paid_status = $1 WHERE email = $2", [id, user_email]);
+} 
+
+
 // Export methods
 // invoice.payment_succeeded: This event is triggered when a payment for an invoice has succeeded.
 export async function handleInvoicePaymentSucceeded(db, stripe, event, user_email = null, subscription_id = null) {
@@ -140,12 +157,15 @@ export async function handleCheckoutSessionCompleted(db, stripe, event, user_ema
 export async function handleCustomerSubscriptionUpdated(db, stripe, event, user_email = null, subscription_id = null) {
   const data = event.data.object;
   const subscription = (await getSubscription(db, data.id)).rows[0];
+  const stripeSubscription = await stripe.subscriptions.retrieve(data.id);
+  const price_id = stripeSubscription.items.data[0].price.id;
   subscription.stripe_data.subscription.quantity = data.quantity;
   subscription.stripe_data.subscription.status = data.status;
   subscription.status = data.status === 'trialing' || data.status === 'active' ? true : false;
   user_email = user_email || subscription.user_email;
   subscription_id = subscription_id || subscription.id;
   await updateSubscription(db, subscription_id, data.quantity, subscription.stripe_data);
+  await updateUserPaidStatus(db, user_email, price_id);
   const deactivateAllLicenses = data?.pause_collection !== null ? true : data.quantity == 0;
   await activateDeactivateLicenses(db, subscription_id, !subscription.status ? 0 : data.quantity, deactivateAllLicenses);
   await createPaymentEvent(db, event.type, data, user_email, subscription_id);
