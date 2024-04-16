@@ -274,11 +274,12 @@ export const handler = async (event) => {
             };
             }
 
-            // We need to store the licenses to be preserved
-            for (let i = 0; i < license_ids.length; i++) {
-                const license_schedule = await queryFunction.createLicenseSchedule(client, subscriptionData.id, license_ids[i], scheduled_date);
+            if (new_quantity < currentProductQuantity) {
+                // We need to store the licenses to be preserved
+                for (let i = 0; i < license_ids.length; i++) {
+                    const license_schedule = await queryFunction.createLicenseSchedule(client, subscriptionData.id, license_ids[i], scheduled_date);
+                }
             }
-
         }
 
         const response = {

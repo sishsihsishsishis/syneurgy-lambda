@@ -149,6 +149,8 @@ export async function handleCheckoutSessionCompleted(db, stripe, event, user_ema
   
   const createdSubscription = await createSubscription(db, user_email, subscription.quantity, stripe_data);
   subscription_id = createdSubscription.rows[0].id;
+  const price_id = subscription.items.data[0].price.id;
+  await updateUserPaidStatus(db, user_email, price_id);
   await createPaymentEvent(db, event.type, data, user_email, subscription_id);
   await createLicense(db, user_email, subscription_id, true, true, null, true, false, price);
 }
@@ -158,15 +160,23 @@ export async function handleCustomerSubscriptionUpdated(db, stripe, event, user_
   const data = event.data.object;
   const subscription = (await getSubscription(db, data.id)).rows[0];
   const stripeSubscription = await stripe.subscriptions.retrieve(data.id);
-  const price_id = stripeSubscription.items.data[0].price.id;
   subscription.stripe_data.subscription.quantity = data.quantity;
   subscription.stripe_data.subscription.status = data.status;
   subscription.status = data.status === 'trialing' || data.status === 'active' ? true : false;
   user_email = user_email || subscription.user_email;
   subscription_id = subscription_id || subscription.id;
   await updateSubscription(db, subscription_id, data.quantity, subscription.stripe_data);
-  await updateUserPaidStatus(db, user_email, price_id);
-  const deactivateAllLicenses = data?.pause_collection !== null ? true : data.quantity == 0;
+  let deactivateAllLicenses = data?.pause_collection !== null ? true : data.quantity == 0;
+  if (stripeSubscription !== undefined) {
+    const price_id = stripeSubscription.items.data[0].price.id;
+    await updateUserPaidStatus(db, user_email, price_id);
+  }
+  else{
+    // If the subscription is not found in Stripe, we need to deactivate all licenses as it we assume it was canceled
+    deactivateAllLicenses = true;
+    await updateUserPaidStatus(db, user_email, 0);
+  }
+  
   await activateDeactivateLicenses(db, subscription_id, !subscription.status ? 0 : data.quantity, deactivateAllLicenses);
   await createPaymentEvent(db, event.type, data, user_email, subscription_id);
 }
@@ -178,6 +188,7 @@ export async function handleCustomerSubscriptionDeleted(db, stripe, event, user_
   user_email = user_email || subscription.user_email;
   subscription_id = subscription_id || subscription.id;
   await customerSubscriptionDeleted(db, subscription_id);
+  await updateUserPaidStatus(db, user_email, 0);
   await createPaymentEvent(db, event.type, data, null, null);
 }
 
