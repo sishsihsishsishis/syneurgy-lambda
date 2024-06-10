@@ -32,8 +32,8 @@ export const handler = async (event) => {
     }
   
     const requestBody = JSON.parse(event.body);
-    const { user_email, status, account_created } = requestBody;
-  
+    const { user_email, status } = requestBody;
+    let account_created = false;
     if (!user_email) {
       return {
         statusCode: 400,
@@ -52,11 +52,14 @@ export const handler = async (event) => {
     const userData = user?.rows[0];
 
     if (!userData) {
-      return {
-        statusCode: 404,
-        headers: configEnv.headers,
-        body: JSON.stringify({ error: 'User not found.' }),
-      };
+      // return {
+      //   statusCode: 404,
+      //   headers: configEnv.headers,
+      //   body: JSON.stringify({ error: 'User not found.' }),
+      // };
+      account_created = false;
+    } else {
+      account_created = true;
     }
 
     // Verify e-mail availability in licenses
@@ -90,7 +93,7 @@ export const handler = async (event) => {
       updatedLicense = await queryFunction.licenses(
         client, 
         { command: 'create-license',
-          data: { user_email, subscription_id: null, status: status || true, account_created: account_created || true, free_account: true }
+          data: { user_email, subscription_id: null, status: status || true, account_created: account_created , free_account: true }
         }
       );
 
