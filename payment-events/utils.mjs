@@ -8,6 +8,7 @@ const fromEmail = configEnv.fromEmail;
 const frontendBaseUrl = configEnv.frontendBaseUrl;
 const confirmEmailID = configEnv.confirmEmailID;
 const client = new postmark.ServerClient(postmarkToken);
+const funnelAccountMinutes = configEnv.funnelAccountMinutes;
 
 const sendTemplateEmailWithPostmark = async (
   toEmail,
@@ -25,6 +26,60 @@ const sendTemplateEmailWithPostmark = async (
   } catch (error) {
     console.error("Failed to send email:", error);
     throw new Error("Failed to send email");
+  }
+};
+export const addMoreMinutes = async (db, email, minutesToAdd) => {
+  try {
+    // Convert email to lowercase and encode password
+    const lowercasedEmail = email.toLowerCase();
+    const checkUserQuery = `SELECT id FROM users WHERE email = $1`;
+    const userResult = await db.query(checkUserQuery, [lowercasedEmail]);
+    if (userResult.rows.length > 0) {
+      const uId = userResult.rows[0].id;
+      console.log("User already exists with this email:", lowercasedEmail);
+      // Update the user_minutes table
+      const updateMinutesQuery = `
+        UPDATE user_minutes 
+        SET all_minutes = all_minutes + $2 
+        WHERE user_id = $1
+      `;
+      await db.query(updateMinutesQuery, [uId, minutesToAdd]);
+
+      console.log("Added 90 minutes to user with ID:", uId);
+    }
+  } catch (error) {
+    console.error("Error in createUserAndSendEmail:", error);
+    throw new Error("User creation or email sending failed");
+  }
+};
+
+export const resetMinutes = async (db, email) => {
+  try {
+    // Convert email to lowercase
+    const lowercasedEmail = email.toLowerCase();
+    const checkUserQuery = `SELECT id FROM users WHERE email = $1`;
+    const userResult = await db.query(checkUserQuery, [lowercasedEmail]);
+    console.log("userResult~~~", userResult);
+
+    if (userResult.rows.length > 0) {
+      const uId = userResult.rows[0].id;
+      console.log("User exists with this email:", lowercasedEmail);
+
+      // Update the user_minutes table to set all_minutes to 0
+      const resetMinutesQuery = `
+        UPDATE user_minutes 
+        SET all_minutes = 0 
+        WHERE user_id = $1
+      `;
+      await db.query(resetMinutesQuery, [uId]);
+
+      console.log("Set all_minutes to 0 for user with ID:", uId);
+    } else {
+      console.log("No user found with this email:", lowercasedEmail);
+    }
+  } catch (error) {
+    console.error("Error in resetMinutes:", error);
+    throw new Error("Failed to reset minutes");
   }
 };
 
@@ -103,6 +158,18 @@ export const createUserAndSendEmail = async (db, email, paidStatus) => {
             VALUES ($1, $2);
         `;
     await db.query(assignRoleQuery, [userId, roleId]);
+
+    const insertMinutesQuery = `
+      INSERT INTO user_minutes (user_id, all_minutes, consumed_minutes)
+      VALUES ($1, $2, $3);
+    `;
+    console.log("funnelAccountMinutes~~~", funnelAccountMinutes);
+
+    await db.query(insertMinutesQuery, [userId, funnelAccountMinutes, 0]);
+
+    console.log(
+      `User minutes initialized with 120 minutes for user: ${userId}`
+    );
 
     const model = {
       invite_receiver_email: email,

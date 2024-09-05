@@ -1,7 +1,10 @@
 import * as configEnv from "./config.mjs";
-import { createUserAndSendEmail } from "./utils.mjs";
+import { addMoreMinutes, createUserAndSendEmail, resetMinutes } from "./utils.mjs";
 const stripeProductPrices = configEnv.stripeProductPrices;
-
+const minutesToAdd90 = configEnv.minutesToAdd90;
+const minutesToAdd200 = configEnv.minutesToAdd200;
+const minutesToAdd400 = configEnv.minutesToAdd400;
+const minutesToAdd700 = configEnv.minutesToAdd700;
 // Private methods
 async function createPaymentEvent(
   db,
@@ -222,73 +225,114 @@ export async function handleCheckoutSessionCompleted(
   subscription_id = null
 ) {
   const data = event.data.object;
-  const subscription = await stripe.subscriptions.retrieve(data.subscription);
-  console.log("subscription~~~", subscription.items.data[0].plan.id);
-  const price = subscription.items.data[0].plan.id;
-  user_email = data.metadata.email;
-  console.log("price~~~", price);
-  console.log("user_email~~~", user_email);
-  const stripe_data = {
-    session: {
-      id: data.id,
-      currency: data.currency,
-      payment_status: data.payment_status,
-      mode: data.mode,
-      status: data.status,
-    },
-    invoice: {
-      id: data.invoice,
-    },
-    customer: {
-      id: data.customer,
-      name: data.customer_details.name,
-      email: data.customer_details.email,
-    },
-    subscription: {
-      id: subscription.id,
-      quantity: subscription.quantity,
-      status: subscription.status,
-    },
-  };
+  console.log('data~~~', data);
+  
+  const isSubscription = data.mode === "subscription";
+  if (isSubscription) {
+    const subscription = await stripe.subscriptions.retrieve(data.subscription);
+    console.log("subscription~~~", subscription.items.data[0].plan.id);
+    const price = subscription.items.data[0].plan.id;
+    user_email = data.metadata.email;
+    console.log("price~~~", price);
+    console.log("user_email~~~", user_email);
+    const stripe_data = {
+      session: {
+        id: data.id,
+        currency: data.currency,
+        payment_status: data.payment_status,
+        mode: data.mode,
+        status: data.status,
+      },
+      invoice: {
+        id: data.invoice,
+      },
+      customer: {
+        id: data.customer,
+        name: data.customer_details.name,
+        email: data.customer_details.email,
+      },
+      subscription: {
+        id: subscription.id,
+        quantity: subscription.quantity,
+        status: subscription.status,
+      },
+    };
 
-  const products = JSON.parse(stripeProductPrices);
-  let id = 0;
-  for (let i = 0; i < products.length; i++) {
-    if (price === products[i].price) {
-      id = products[i].id;
-      break;
+    const products = JSON.parse(stripeProductPrices);
+    let id = 0;
+    for (let i = 0; i < products.length; i++) {
+      if (price === products[i].price) {
+        id = products[i].id;
+        break;
+      }
+    }
+    console.log("id~~~~~~", id);
+    if (id === 5) {
+      const createdUser = await createUserAndSendEmail(db, user_email, id);
+      console.log("createdUser~~~", createdUser);
+    } else if (id === 4) {
+      await addMoreMinutes(db, user_email, minutesToAdd700);
+    } else if (id === 3) {
+      await addMoreMinutes(db, user_email, minutesToAdd400);
+    } else if (id === 2) {
+      await addMoreMinutes(db, user_email, minutesToAdd200);
+    }
+
+    const createdSubscription = await createSubscription(
+      db,
+      user_email,
+      subscription.quantity,
+      stripe_data
+    );
+    subscription_id = createdSubscription.rows[0].id;
+    const price_id = subscription.items.data[0].price.id;
+    console.log("subscription_id~~~", subscription_id);
+    console.log("price_id~~~", price_id);
+
+    await updateUserPaidStatus(db, user_email, price_id);
+    await createPaymentEvent(db, event.type, data, user_email, subscription_id);
+    await createLicense(
+      db,
+      user_email,
+      subscription_id,
+      true,
+      true,
+      null,
+      true,
+      false,
+      price
+    );
+  } else {
+    console.log("it is payment event ~~~~~~~");
+    // Handle one-time payment logic
+    console.log("data~~~", data);
+
+    const lineItems = await stripe.checkout.sessions.listLineItems(data.id, {
+      limit: 1,
+    });
+    const price_id = lineItems.data[0].price.id;
+    console.log("Fixed price~~~", price_id);
+
+    user_email = data.metadata.email;
+
+    console.log("User email:", user_email);
+
+    // Process the one-time payment (e.g., create a license or update user status)
+    const products = JSON.parse(stripeProductPrices);
+    let id = 0;
+    for (let i = 0; i < products.length; i++) {
+      if (price_id === products[i].price) {
+        id = products[i].id;
+        break;
+      }
+    }
+    console.log("Fixed Product ID:", id);
+    if (id === 6) {
+      // Handle other product IDs as needed
+      console.log("succeeded to pay fixed price.");
+      await addMoreMinutes(db, user_email, minutesToAdd90);
     }
   }
-  console.log("id~~~~~~", id);
-  if (id === 5) {
-    const createdUser = await createUserAndSendEmail(db, user_email, id);
-    console.log("createdUser~~~", createdUser);
-  }
-
-  const createdSubscription = await createSubscription(
-    db,
-    user_email,
-    subscription.quantity,
-    stripe_data
-  );
-  subscription_id = createdSubscription.rows[0].id;
-  const price_id = subscription.items.data[0].price.id;
-  console.log("subscription_id~~~", subscription_id);
-  console.log("price_id~~~", price_id);
-
-  await updateUserPaidStatus(db, user_email, price_id);
-  await createPaymentEvent(db, event.type, data, user_email, subscription_id);
-  await createLicense(
-    db,
-    user_email,
-    subscription_id,
-    true,
-    true,
-    null,
-    true,
-    false,
-    price
-  );
 }
 
 // customer.subscription.updated: This event is triggered when a customer's subscription is updated.
@@ -346,6 +390,7 @@ export async function handleCustomerSubscriptionDeleted(
   const subscription = (await getSubscription(db, data.id)).rows[0];
   user_email = user_email || subscription.user_email;
   subscription_id = subscription_id || subscription.id;
+  await resetMinutes(db, user_email);
   await customerSubscriptionDeleted(db, subscription_id);
   await updateUserPaidStatus(db, user_email, 0);
   await createPaymentEvent(db, event.type, data, null, null);
