@@ -5,9 +5,7 @@ export const headers = {
   "Access-Control-Allow-Methods": "OPTIONS, GET, POST, PUT, DELETE",
   "Access-Control-Allow-Credentials": true,
 };
-export const rootLevelEmailUrl = process.env.ROOT_LEVEL_EMAIL_URL;
-export const validateTokenUrl = process.env.VALIDATE_TOKEN_URL;
-export const validateTokenExternalUrl = process.env.VALIDATE_TOKEN_EXTERNAL_URL;
+
 export const dbHost = process.env.DB_HOST;
 export const dbUser = process.env.DB_USER;
 export const dbName = process.env.DB_NAME;

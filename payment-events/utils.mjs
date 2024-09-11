@@ -40,6 +40,31 @@ export const addMoreMinutes = async (db, email, minutesToAdd) => {
       // Update the user_minutes table
       const updateMinutesQuery = `
         UPDATE user_minutes 
+        SET added_minutes = added_minutes + $2 
+        WHERE user_id = $1
+      `;
+      await db.query(updateMinutesQuery, [uId, minutesToAdd]);
+
+      console.log("Added 90 minutes to user with ID:", uId);
+    }
+  } catch (error) {
+    console.error("Error in createUserAndSendEmail:", error);
+    throw new Error("User creation or email sending failed");
+  }
+};
+
+export const addInitMinutes = async (db, email, minutesToAdd) => {
+  try {
+    // Convert email to lowercase and encode password
+    const lowercasedEmail = email.toLowerCase();
+    const checkUserQuery = `SELECT id FROM users WHERE email = $1`;
+    const userResult = await db.query(checkUserQuery, [lowercasedEmail]);
+    if (userResult.rows.length > 0) {
+      const uId = userResult.rows[0].id;
+      console.log("User already exists with this email:", lowercasedEmail);
+      // Update the user_minutes table
+      const updateMinutesQuery = `
+        UPDATE user_minutes 
         SET all_minutes = all_minutes + $2 
         WHERE user_id = $1
       `;
@@ -53,7 +78,7 @@ export const addMoreMinutes = async (db, email, minutesToAdd) => {
   }
 };
 
-export const resetMinutes = async (db, email) => {
+export const resetMinutes = async (db, email, initial_minutes) => {
   try {
     // Convert email to lowercase
     const lowercasedEmail = email.toLowerCase();
@@ -64,16 +89,61 @@ export const resetMinutes = async (db, email) => {
     if (userResult.rows.length > 0) {
       const uId = userResult.rows[0].id;
       console.log("User exists with this email:", lowercasedEmail);
-
-      // Update the user_minutes table to set all_minutes to 0
-      const resetMinutesQuery = `
+      if (initial_minutes === 0) {
+        // Update the user_minutes table to set all_minutes to 0
+        const resetMinutesQuery = `
         UPDATE user_minutes 
-        SET all_minutes = 0 
+        SET all_minutes = $2 
         WHERE user_id = $1
-      `;
-      await db.query(resetMinutesQuery, [uId]);
+        `;
+        await db.query(resetMinutesQuery, [uId, initial_minutes]);
+        console.log("Set all_minutes to 0 for user with ID:", uId);
+      } else {
+        const getUserMinutesQuery = `
+          SELECT all_minutes, consumed_minutes, added_minutes 
+          FROM user_minutes 
+          WHERE user_id = $1
+        `;
+        const userMinutesResult = await db.query(getUserMinutesQuery, [uId]);
 
-      console.log("Set all_minutes to 0 for user with ID:", uId);
+        if (userMinutesResult.rows.length > 0) {
+          let { all_minutes, consumed_minutes, added_minutes } = userMinutesResult.rows[0];
+
+          console.log("Current values - all_minutes:", all_minutes, "consumed_minutes:", consumed_minutes, "added_minutes:", added_minutes);
+
+          // Case 1: all_minutes is greater than consumed_minutes
+          if (all_minutes >= consumed_minutes) {
+            added_minutes = added_minutes; // keep the same added minutes
+            consumed_minutes = 0; // reset consumed minutes to 0
+          }
+          // Case 2: all_minutes is less than consumed_minutes
+          else if (all_minutes < consumed_minutes) {
+            // If all_minutes + added_minutes is greater than consumed_minutes
+            if (all_minutes + added_minutes > consumed_minutes) {
+              added_minutes = all_minutes + added_minutes - consumed_minutes; // update added_minutes
+              consumed_minutes = 0; // reset consumed minutes to 0
+            } else {
+              // If all_minutes + added_minutes is less than consumed_minutes
+              consumed_minutes = consumed_minutes - all_minutes - added_minutes; // update consumed_minutes
+              added_minutes = 0; // set added_minutes to 0
+            }
+          }
+
+          // Update the user_minutes table with the new values
+          const updateMinutesQuery = `
+            UPDATE user_minutes 
+            SET all_minutes = $2, consumed_minutes = $3, added_minutes = $4 
+            WHERE user_id = $1
+          `;
+          await db.query(updateMinutesQuery, [uId, initial_minutes, consumed_minutes, added_minutes]);
+
+          console.log("Updated values - all_minutes:", initial_minutes, "consumed_minutes:", consumed_minutes, "added_minutes:", added_minutes);
+        } else {
+          console.log("No record found in user_minutes for user with ID:", uId);
+        }
+      }
+      
+      console.log("initial_minutes~~~", initial_minutes);
     } else {
       console.log("No user found with this email:", lowercasedEmail);
     }
@@ -117,6 +187,7 @@ export const createUserAndSendEmail = async (db, email, paidStatus) => {
         await db.query(updateUserRoleQuery, [uId, roleId]);
         console.log(`User role updated to ROLE_ADMIN for user: ${uId}`);
       }
+      await addInitMinutes(db, lowercasedEmail, funnelAccountMinutes);
       return 0; // Return 0 if the user already exists
     }
     const secureRandomPassword = generateRandomPassword(12);

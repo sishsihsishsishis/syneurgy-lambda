@@ -1,10 +1,11 @@
 import * as configEnv from "./config.mjs";
-import { addMoreMinutes, createUserAndSendEmail, resetMinutes } from "./utils.mjs";
+import { addMoreMinutes, createUserAndSendEmail, addInitMinutes, resetMinutes } from "./utils.mjs";
 const stripeProductPrices = configEnv.stripeProductPrices;
 const minutesToAdd90 = configEnv.minutesToAdd90;
 const minutesToAdd200 = configEnv.minutesToAdd200;
 const minutesToAdd400 = configEnv.minutesToAdd400;
 const minutesToAdd700 = configEnv.minutesToAdd700;
+const funnelAccountMinutes = configEnv.funnelAccountMinutes;
 // Private methods
 async function createPaymentEvent(
   db,
@@ -197,7 +198,27 @@ export async function handleInvoicePaymentSucceeded(
   subscription_id = null
 ) {
   const data = event.data.object;
-  console.log(`1. ${event.type} - handleInvoicePaymentSucceeded`);
+  console.log('data~~~', data);
+  console.log(`1. ${event.type} -~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ handleInvoicePaymentSucceeded`);
+  const billing_reason = data.billing_reason;
+  if (billing_reason === 'subscription_cycle') {
+    const user_email = data.customer_email;
+    const invoiceLines = data.lines.data;
+    if (invoiceLines.length > 0) {
+      const lineItem = invoiceLines[0];
+      
+      // Get the price details from the line item
+      const price = lineItem.price.unit_amount;  // Price in cents
+      const currency = lineItem.price.currency;
+      console.log('price~~~', price);
+      
+      if (price === 9700) {
+        await resetMinutes(db, user_email, funnelAccountMinutes);
+      }
+    }
+    
+  }
+  
   await createPaymentEvent(db, event.type, data, user_email, subscription_id);
   // Perform actions in your application, e.g., update order status or send a confirmation email to the customer.
 }
@@ -271,11 +292,11 @@ export async function handleCheckoutSessionCompleted(
       const createdUser = await createUserAndSendEmail(db, user_email, id);
       console.log("createdUser~~~", createdUser);
     } else if (id === 4) {
-      await addMoreMinutes(db, user_email, minutesToAdd700);
+      await addInitMinutes(db, user_email, minutesToAdd700);
     } else if (id === 3) {
-      await addMoreMinutes(db, user_email, minutesToAdd400);
+      await addInitMinutes(db, user_email, minutesToAdd400);
     } else if (id === 2) {
-      await addMoreMinutes(db, user_email, minutesToAdd200);
+      await addInitMinutes(db, user_email, minutesToAdd200);
     }
 
     const createdSubscription = await createSubscription(
@@ -390,7 +411,7 @@ export async function handleCustomerSubscriptionDeleted(
   const subscription = (await getSubscription(db, data.id)).rows[0];
   user_email = user_email || subscription.user_email;
   subscription_id = subscription_id || subscription.id;
-  await resetMinutes(db, user_email);
+  await resetMinutes(db, user_email, 0);
   await customerSubscriptionDeleted(db, subscription_id);
   await updateUserPaidStatus(db, user_email, 0);
   await createPaymentEvent(db, event.type, data, null, null);
