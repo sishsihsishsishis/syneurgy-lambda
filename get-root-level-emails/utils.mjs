@@ -28,50 +28,6 @@ export function parseAndCheckHttpError(data) {
   return data;
 }
 
-// async function validateToken(authorizationToken) {
-//   try {
-//     if (!authorizationToken) {
-//       return {
-//         statusCode: 401,
-//         headers: configEnv.headers,
-//         body: JSON.stringify({ error: 'Authorization token not provided.' }),
-//       };
-//     }
-
-//     if (!configEnv.validateTokenUrl) {
-//       return {
-//         statusCode: 500,
-//         headers: configEnv.headers,
-//         body: JSON.stringify({ error: 'Could not resolve URL to validate token.' }),
-//       };
-//     }
-
-//     const response = await axios.get(configEnv.validateTokenUrl, {
-//       headers: {
-//         Authorization: authorizationToken,
-//       },
-//     });
-
-//     if (response.status === 200) {
-//       return { statusCode: response.status, headers: {}, body: { email: response.data.data.sub } };
-//     }
-//   } catch (error) {
-//     if (error.response && error.response.status === 401) {
-//       return {
-//         statusCode: 401,
-//         headers: configEnv.headers,
-//         body: JSON.stringify({ error: 'Unauthorized: Token is invalid or expired.' }),
-//       };
-//     }
-
-//     return {
-//       statusCode: 500,
-//       headers: configEnv.headers,
-//       body: JSON.stringify({ error: 'Internal server error.' }),
-//     };
-//   }
-// }
-
 async function validateTokenExternal(authorizationToken) {
   try {
     if (!authorizationToken) {

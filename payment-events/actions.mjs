@@ -1,5 +1,10 @@
 import * as configEnv from "./config.mjs";
-import { addMoreMinutes, createUserAndSendEmail, addInitMinutes, resetMinutes } from "./utils.mjs";
+import {
+  addMoreMinutes,
+  createUserAndSendEmail,
+  addInitMinutes,
+  resetMinutes,
+} from "./utils.mjs";
 const stripeProductPrices = configEnv.stripeProductPrices;
 const minutesToAdd90 = configEnv.minutesToAdd90;
 const minutesToAdd200 = configEnv.minutesToAdd200;
@@ -14,10 +19,25 @@ async function createPaymentEvent(
   user_email = null,
   subscription_id = null
 ) {
-  return db.query(
-    "INSERT INTO payment_events (id, user_email, subscription_id, event_type, event_data, created_date) VALUES (nextval('payment_events_id_seq'::regclass), $1, $2, $3, $4, NOW()) RETURNING *",
-    [user_email, subscription_id, event_type, event_data]
-  );
+  console.log("createPaymentEvent~~~", createPaymentEvent);
+  try {
+    const result = await db.query(
+      "INSERT INTO payment_events (id, user_email, subscription_id, event_type, event_data, created_date) VALUES (nextval('payment_events_id_seq'::regclass), $1, $2, $3, $4, NOW()) RETURNING *",
+      [user_email, subscription_id, event_type, event_data]
+    );
+
+    // Check if the result has rows returned (i.e., insertion was successful)
+    if (result && result.rows && result.rows.length > 0) {
+      console.log("Insertion successful:", result.rows[0]);
+      return result.rows[0]; // You can return the inserted row
+    } else {
+      console.log("Insertion failed or no rows returned.");
+      return null; // Return null or handle as appropriate
+    }
+  } catch (error) {
+    console.error("Error inserting payment event:", error);
+    throw error; // Re-throw the error to be handled higher up in the call stack
+  }
 }
 
 async function createLicense(
@@ -31,21 +51,37 @@ async function createLicense(
   free_account = false,
   price
 ) {
-  subscription_id = free_account == true ? null : subscription_id;
-  is_admin = free_account == true ? false : is_admin;
-  return db.query(
-    "INSERT INTO licenses (id, user_email, subscription_id, status, account_created, stripe_data, is_admin, free_account, created_date, price) VALUES (nextval('licenses_id_seq'::regclass), $1, $2, $3, $4, $5, $6, $7, NOW(), $8) RETURNING *",
-    [
-      user_email,
-      subscription_id,
-      status,
-      account_created,
-      stripe_data,
-      is_admin,
-      free_account,
-      price,
-    ]
-  );
+  // Adjust values based on free_account flag
+  subscription_id = free_account ? null : subscription_id;
+  is_admin = free_account ? false : is_admin;
+
+  try {
+    const result = await db.query(
+      "INSERT INTO licenses (id, user_email, subscription_id, status, account_created, stripe_data, is_admin, free_account, created_date, price) VALUES (nextval('licenses_id_seq'::regclass), $1, $2, $3, $4, $5, $6, $7, NOW(), $8) RETURNING *",
+      [
+        user_email,
+        subscription_id,
+        status,
+        account_created,
+        stripe_data,
+        is_admin,
+        free_account,
+        price,
+      ]
+    );
+
+    // Check if the result has rows returned (i.e., insertion was successful)
+    if (result && result.rows && result.rows.length > 0) {
+      console.log("License created successfully:", result.rows[0]);
+      return result.rows[0]; // Return the inserted license object
+    } else {
+      console.log("Insertion failed or no rows returned.");
+      return null; // Return null if no rows are returned
+    }
+  } catch (error) {
+    console.error("Error inserting license:", error);
+    throw error; // Re-throw the error to be handled higher up in the call stack
+  }
 }
 
 async function createSubscription(
@@ -54,10 +90,24 @@ async function createSubscription(
   subscriptions_amount,
   stripe_data
 ) {
-  return db.query(
-    "INSERT INTO subscriptions (id, user_email, subscriptions_amount, stripe_data, created_date) VALUES (nextval('subscriptions_id_seq'::regclass), $1, $2, $3, NOW()) RETURNING *",
-    [user_email, subscriptions_amount, stripe_data]
-  );
+  try {
+    const result = await db.query(
+      "INSERT INTO subscriptions (id, user_email, subscriptions_amount, stripe_data, created_date) VALUES (nextval('subscriptions_id_seq'::regclass), $1, $2, $3, NOW()) RETURNING *",
+      [user_email, subscriptions_amount, stripe_data]
+    );
+
+    // Check if the insert was successful
+    if (result.rows && result.rows.length > 0) {
+      // Insert successful, return the inserted subscription
+      return result.rows[0];
+    } else {
+      // Insert failed
+      throw new Error("Failed to insert subscription");
+    }
+  } catch (error) {
+    console.error("Error creating subscription:", error);
+    throw error; // Rethrow the error to be handled by the caller
+  }
 }
 
 async function updateSubscription(db, id, subscriptions_amount, stripe_data) {
@@ -198,27 +248,28 @@ export async function handleInvoicePaymentSucceeded(
   subscription_id = null
 ) {
   const data = event.data.object;
-  console.log('data~~~', data);
-  console.log(`1. ${event.type} -~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ handleInvoicePaymentSucceeded`);
+  console.log("data~~~", data);
+  console.log(
+    `1. ${event.type} -~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ handleInvoicePaymentSucceeded`
+  );
   const billing_reason = data.billing_reason;
-  if (billing_reason === 'subscription_cycle') {
+  if (billing_reason === "subscription_cycle") {
     const user_email = data.customer_email;
     const invoiceLines = data.lines.data;
     if (invoiceLines.length > 0) {
       const lineItem = invoiceLines[0];
-      
+
       // Get the price details from the line item
-      const price = lineItem.price.unit_amount;  // Price in cents
+      const price = lineItem.price.unit_amount; // Price in cents
       const currency = lineItem.price.currency;
-      console.log('price~~~', price);
-      
+      console.log("price~~~", price);
+
       if (price === 9700) {
         await resetMinutes(db, user_email, funnelAccountMinutes);
       }
     }
-    
   }
-  
+
   await createPaymentEvent(db, event.type, data, user_email, subscription_id);
   // Perform actions in your application, e.g., update order status or send a confirmation email to the customer.
 }
@@ -246,8 +297,8 @@ export async function handleCheckoutSessionCompleted(
   subscription_id = null
 ) {
   const data = event.data.object;
-  console.log('data~~~', data);
-  
+  console.log("data~~~", data);
+
   const isSubscription = data.mode === "subscription";
   if (isSubscription) {
     const subscription = await stripe.subscriptions.retrieve(data.subscription);
@@ -440,5 +491,12 @@ export async function handleDefault(
 ) {
   const data = event.data.object;
   console.log(`${event.type} - handleDefault`);
-  await createPaymentEvent(db, event.type, data, user_email, subscription_id);
+  const sss = await createPaymentEvent(
+    db,
+    event.type,
+    data,
+    user_email,
+    subscription_id
+  );
+  console.log("sss~~~", sss);
 }

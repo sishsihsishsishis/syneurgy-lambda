@@ -95,27 +95,6 @@ async function validateTokenExternal(authorizationToken) {
   }
 }
 
-export async function isRoot(email) {
-  let _isRoot;
-  try {
-    const response = await axios.get(configEnv.rootLevelEmailUrl);
-
-    if (response.status === 200) {
-      _isRoot = response.data.emails.indexOf(email) !== -1 ? true : false;
-    }
-  } catch (error) {
-    _isRoot = false;
-  } finally {
-    if (!email || (email && !_isRoot)) {
-      return {
-        statusCode: 401,
-        headers: configEnv.headers,
-        body: JSON.stringify({ email, error: 'You do not have permission for this resource.' }),
-      };
-    }
-  }
-}
-
 export async function getTokenEmail(event) {
   const authorizationToken = event.headers && event.headers['authorization'].replace('Bearer ', '');;
   const responseData = await validateTokenExternal(authorizationToken)

@@ -22,7 +22,7 @@ export const handler = async (event) => {
       'michael@syneurgy.com',
       'shijia@syneurgy.com',
       'david@syneurgy.com',
-      'pcastanog@unal.edu.co'
+      'carlos.guzman@techsquads.com'
     ]
     const response = {
       statusCode: 200,
